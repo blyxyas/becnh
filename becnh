@@ -1,0 +1,204 @@
+#!/bin/bash
+# becnh is a script used to create a reproducible environment for Clippy benchmarks, 
+
+display_help() {
+    echo "Quick way to compare a PR's performance against Clippy's master. The
+recommended way of using this is in some controlled environment like a
+server or a Rust Dev Desktop
+
+    Usage: ./becnh <PR NUMBER> <BRANCH>
+
+    Options:
+        -r, --reconfigure            Reconfigure config.toml, mainly used when installing a new version of \`becnh\`
+        -c, --clean                  Clean all repos, starting as a blank slate
+"
+    exit
+}
+
+# I love interpreted languages <3 there isn't such thing as "security", so I
+# can just do whatever I want hehe :3
+check_color() {
+    if [ -t 1 ]; then
+        ncolors=$(tput colors)
+        if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+            bold="$(tput bold)"
+            normal="$(tput sgr0)"
+            red="$(tput setaf 1)"
+            green="$(tput setaf 2)"
+
+            smart_echo() {
+                echo "${green}${bold}$1${normal} $2"
+            }
+
+            error() {
+                echo "[${red}${bold}ERROR${normal}] $1"
+            }
+        else
+            smart_echo() {
+                echo "$1 $2"
+            }
+
+            error() {
+                echo "[ERROR] $1"
+            }
+        fi
+    fi
+}
+
+check_color
+
+reconfigure() {
+    smart_echo "Reconfiguring"
+    echo "# See \`src/bootstrap/defaults\` for more information.
+# Note that this has no default value (x.py uses the defaults in \`config.example.toml\`).
+profile = 'dist'
+
+# Keeps track of major changes made to this configuration.
+#
+# This value also represents ID of the PR that caused major changes. Meaning,
+# you can visit github.com/rust-lang/rust/pull/{change-id} to check for more details.
+#
+# A 'major change' includes any of the following
+#  - A new option
+#  - A change in the default values
+#
+# If \`change-id\` does not match the version that is currently running,
+# \`x.py\` will prompt you to update it and check the related PR for more details.
+change-id = 115898
+build.extended = false
+rust.lto = \"thin\"
+rust.jemalloc = true
+rust.codegen-units = 1
+rust.codegen-units-std = 1
+rust.debug = false
+rust.optimize = true
+rust.incremental = false
+llvm.download-ci-llvm = true # We don't need to build LLVM
+" > "$ROOT/rust/config.toml"
+}
+
+if [ -f "becnh" ]; then # We're in the same directory as the becnh script.
+        ROOT=$(pwd) # Useful for later
+    else
+        error "Please run this in the same directory as becnh (current directory: $(pwd))"
+fi
+
+if [ "$1" = "--help" ] || [ "$1" = "help" ]; then
+    display_help
+fi
+
+if [ "$1" = "-r" ] || [ "$1" = "--reconfigure" ]; then
+    reconfigure
+    exit
+fi
+
+if [ "$1" = "-c" ] || [ "$1" = "--clean" ]; then
+    rm -rf rust
+    rm -rf rust-clippy
+    # We can keep rustc-perf.
+fi
+
+# Check that all relevant repositories are there, if not, clone them.
+if [ ! -d "rust-clippy" ]; then
+    smart_echo "Cloning" "rust-lang/rust-clippy"
+    git clone https://github.com/rust-lang/rust-clippy &
+fi
+
+if [ ! -d "rustc-perf" ]; then
+    smart_echo "Cloning" "rust-lang/rustc-perf"
+    git clone https://github.com/rust-lang/rustc-perf &
+fi
+
+if [ ! -d "rust" ]; then
+    smart_echo "Cloning" "rust-lang/rust"
+    FIRST_TIME=true
+    git clone https://github.com/rust-lang/rust
+    reconfigure
+fi
+
+# Check if there's a Clippy PR
+cd rust-clippy || error "Couldn't enter rust-clippy"
+
+if [ -n "$1" ] && [[ "$1" =~ ^\#?[0-9]+$ ]]; then
+    # Make sure that there are both a PR ID and branch
+    if [ $# -ne 2 ]; then
+        display_help
+    fi
+        smart_echo "Cloning" "The Clippy PR ($1:$2)"
+        git fetch origin pull/"$1"/head:"$2" || (echo "Something went wrong" && exit)
+    else
+        display_help
+fi
+
+# Move that Clippy submodule to the rust-lang/rust thingy
+cd ../rust || error "Couldn't enter rust";
+if [ ! "$FIRST_TIME" ]; then
+    git switch master
+    git pull origin master --rebase
+fi
+
+# Before pulling new data, let's save the date of the last commit
+LAST_COMMIT_TIME=$(git log -1 --format="%ct")
+
+git fetch # Update metadata
+git checkout -b sync-from-clippy-"$1" ;
+sudo cp -r ../rust-clippy src/tools/clippy
+
+# Build Rust if it's the first time
+if [ "$FIRST_TIME" ]; then
+    smart_echo "Building Rust for the first time, this will take a while."
+    ./x build > /dev/null
+fi
+
+# Now, let's build Clippy
+smart_echo "Building" "src/tools/clippy"
+./x build src/tools/clippy > /dev/null &
+
+# While we're building Clippy, let's also build rustc-perf
+cd ../rustc-perf || error "Couldn't \`cd\` into rustc-perf"
+cargo build -r > /dev/null &
+
+wait
+
+# Now, let's check if we're in CI. Running it on a user's personal machine may yield incorrect results
+if [ -t 1 ]; then
+    if [ -z "$SSH_CLIENT" ] || [ -z "$SSH_TTY" ] || [ -z "$CI" ] && [ -n "$CONTINUE" ]; then
+        # We're not SSH'd or on CI
+        smart_echo "Question" "You're not a remote SSH server, nor on CI, are you sure you want to
+continue? Benchmarking on personal computers with other processes running
+is unreliable and may yield incorrect results
+(set CONTINUE as a env. variable to allow this every time), [Y/n]: "
+        read -r CONTINUE
+        if [ "$CONTINUE" != "${CONTINUE#[Yy]}" ]; then
+            ::
+        else
+            error "Exiting"
+            exit
+      fi
+    fi
+fi
+
+# Let's benchmark this, it would be really cool to benchmark both master and
+# the PR async, but that would need multiple machines to ensure good results.
+
+smart_echo "Benchmark" "Starting benchmarks!"
+cd ../rustc-perf || error "Couldn't enter rustc-perf"
+./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id "PR-$1"
+
+# Do we need to also measure master, or is it recent enough? (More than )
+WEEK=604800
+CURRENT_TIME=$(date +%s)
+if [ "$((10#$CURRENT_TIME - 10#$LAST_COMMIT_TIME))" -ge $WEEK ]; then
+    smart_echo "Question" "Time since last measure is more than a week, do you wish to re-benchmark master Clippy? [Y/n]: "
+    read -r rebench
+    if [ "$rebench" != "${rebench#[Yy]}" ]; then
+        cd ../rust || error "Couldn't enter into rust"
+        smart_echo "Build" "rust-clippy:master"
+        git switch master
+        git pull origin master --rebase
+        x build src/tools/clippy > /dev/null
+        smart_echo "Benchmark" "Benchmarking master!"
+        cd ../rustc-perf || error "Couldn't enter rustc-perf"
+        ./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id "PR-$1"s
+    fi
+fi
