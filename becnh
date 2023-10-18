@@ -6,11 +6,17 @@ display_help() {
 recommended way of using this is in some controlled environment like a
 server or a Rust Dev Desktop
 
-    Usage: ./becnh <PR NUMBER> <BRANCH>
+    Usage: ./becnh <PR NUMBER> <BRANCH> [OPTIONS]
 
     Options:
-        -r, --reconfigure            Reconfigure config.toml, mainly used when installing a new version of \`becnh\`
-        -c, --clean                  Clean all repos, starting as a blank slate
+        -r, --reconfigure   Reconfigure rust/config.toml, mainly used when
+                            installing a new version of \`becnh\`
+
+        -c, --clean         Clean all repos, starting as a blank slate
+        
+        -b, --baseline      Also measure the \`master\` branch along with the
+                            PR. (not async, it will take a while). Recommended
+                            for first runs.
 "
     exit
 }
@@ -90,6 +96,12 @@ fi
 if [ "$1" = "-r" ] || [ "$1" = "--reconfigure" ]; then
     reconfigure
     exit
+fi
+
+if [ "$3" = "-b" ] || [ "$3" = "--baseline" ]; then
+    BASELINE=true
+else
+    BASELINE=false
 fi
 
 if [ "$1" = "-c" ] || [ "$1" = "--clean" ]; then
@@ -185,6 +197,19 @@ smart_echo "Benchmark" "Starting benchmarks!"
 cd ../rustc-perf || error "Couldn't enter rustc-perf"
 ./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id "PR-$1"
 
+# =========================== Let's see about also benchmarking master
+
+baseline() {
+    cd ../rust || error "Couldn't enter into rust"
+    smart_echo "Build" "rust-clippy:master"
+    git switch master
+    git pull origin master --rebase
+    x build src/tools/clippy > /dev/null
+    smart_echo "Benchmark" "Benchmarking master!"
+    cd ../rustc-perf || error "Couldn't enter rustc-perf"
+    ./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id master
+}
+
 # Do we need to also measure master, or is it recent enough? (More than )
 WEEK=604800
 CURRENT_TIME=$(date +%s)
@@ -192,13 +217,8 @@ if [ "$((10#$CURRENT_TIME - 10#$LAST_COMMIT_TIME))" -ge $WEEK ]; then
     smart_echo "Question" "Time since last measure is more than a week, do you wish to re-benchmark master Clippy? [Y/n]: "
     read -r rebench
     if [ "$rebench" != "${rebench#[Yy]}" ]; then
-        cd ../rust || error "Couldn't enter into rust"
-        smart_echo "Build" "rust-clippy:master"
-        git switch master
-        git pull origin master --rebase
-        x build src/tools/clippy > /dev/null
-        smart_echo "Benchmark" "Benchmarking master!"
-        cd ../rustc-perf || error "Couldn't enter rustc-perf"
-        ./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id "PR-$1"s
+        baseline
     fi
+elif [ $BASELINE ]; then
+    baseline
 fi
