@@ -90,10 +90,10 @@ baseline() {
     smart_echo "Build" "rust-clippy:master"
     git switch master
     git pull origin master --rebase
-    x build src/tools/clippy > /dev/null
+    ./x build src/tools/clippy > /dev/null
     smart_echo "Benchmark" "Benchmarking master!"
     cd ../rustc-perf || error "Couldn't enter rustc-perf"
-    ./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id "master-$(date +%Y-%m-%d)"
+    ./target/release/collector bench_local ../rust/build/host/stage2/bin/rustc --profiles Clippy --clippy ../rust/build/host/stage2/bin/cargo-clippy --id "master-$(date +%Y-%m-%d)"
 }
 
 if [ -f "becnh" ]; then # We're in the same directory as the becnh script.
@@ -150,15 +150,18 @@ fi
 # Check if there's a Clippy PR
 cd rust-clippy || error "Couldn't enter rust-clippy"
 
-if [ -n "$1" ] && [[ "$1" =~ ^\#?[0-9]+$ ]]; then
-    # Make sure that there are both a PR ID and branch
-    if [ $# -ne 2 ]; then
-        display_help
+
+if [ ! "$MASTER" ]; then
+    if [ -n "$1" ] && [[ "$1" =~ ^\#?[0-9]+$ ]]; then
+        # Make sure that there are both a PR ID and branch
+        if [ $# -ne 2 ]; then
+            display_help
+        fi
+            smart_echo "Cloning" "The Clippy PR ($1:$2)"
+            git fetch origin pull/"$1"/head:"$2" || (echo "Something went wrong" && exit)
+        else
+            display_help
     fi
-        smart_echo "Cloning" "The Clippy PR ($1:$2)"
-        git fetch origin pull/"$1"/head:"$2" || (echo "Something went wrong" && exit)
-    else
-        display_help
 fi
 
 # Move that Clippy submodule to the rust-lang/rust thingy
@@ -222,7 +225,7 @@ fi
 
 smart_echo "Benchmark" "Starting benchmarks!"
 cd ../rustc-perf || error "Couldn't enter rustc-perf"
-./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id "PR-$1"
+./target/release/collector bench_local ../rust/build/host/stage2/bin/rustc --profiles Clippy --clippy ../rust/build/host/stage2/bin/cargo-clippy --id "PR-$1"
 
 # =========================== Let's see about also benchmarking master
 
