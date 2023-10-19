@@ -17,6 +17,8 @@ server or a Rust Dev Desktop
         -b, --baseline      Also measure the \`master\` branch along with the
                             PR. (not async, it will take a while). Recommended
                             for first runs.
+        
+        -m, --master        Only benchmark master, without a PR.
 "
     exit
 }
@@ -83,6 +85,17 @@ llvm.download-ci-llvm = true # We don't need to build LLVM
 " > "$ROOT/rust/config.toml"
 }
 
+baseline() {
+    cd ../rust || error "Couldn't enter into rust"
+    smart_echo "Build" "rust-clippy:master"
+    git switch master
+    git pull origin master --rebase
+    x build src/tools/clippy > /dev/null
+    smart_echo "Benchmark" "Benchmarking master!"
+    cd ../rustc-perf || error "Couldn't enter rustc-perf"
+    ./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id "master-$(date +%Y-%m-%d)"
+}
+
 if [ -f "becnh" ]; then # We're in the same directory as the becnh script.
         ROOT=$(pwd) # Useful for later
     else
@@ -102,6 +115,12 @@ if [ "$3" = "-b" ] || [ "$3" = "--baseline" ]; then
     BASELINE=true
 else
     BASELINE=false
+fi
+
+if [ "$1" = "-m" ] || [ "$1" = "--master" ]; then
+    MASTER=true
+else
+    MASTER=false
 fi
 
 if [ "$1" = "-c" ] || [ "$1" = "--clean" ]; then
@@ -190,6 +209,14 @@ is unreliable and may yield incorrect results
     fi
 fi
 
+# Before benchmarking, let's check if we just need to benchmark master
+
+if [ "$MASTER" ]; then
+    baseline
+    exit
+fi
+
+
 # Let's benchmark this, it would be really cool to benchmark both master and
 # the PR async, but that would need multiple machines to ensure good results.
 
@@ -198,17 +225,6 @@ cd ../rustc-perf || error "Couldn't enter rustc-perf"
 ./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id "PR-$1"
 
 # =========================== Let's see about also benchmarking master
-
-baseline() {
-    cd ../rust || error "Couldn't enter into rust"
-    smart_echo "Build" "rust-clippy:master"
-    git switch master
-    git pull origin master --rebase
-    x build src/tools/clippy > /dev/null
-    smart_echo "Benchmark" "Benchmarking master!"
-    cd ../rustc-perf || error "Couldn't enter rustc-perf"
-    ./target/release/collector bench_local ../rust/build/host/stage2/rustc --profiles Clippy --clippy ../rust/build/host/stage2/cargo-clippy --id master
-}
 
 # Do we need to also measure master, or is it recent enough? (More than )
 WEEK=604800
