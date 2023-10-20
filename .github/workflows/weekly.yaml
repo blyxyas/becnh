@@ -9,6 +9,12 @@ jobs:
   benchmark_master:
     runs-on: ubuntu-latest
     steps:
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          default: true
+          profile: minimal
       - uses: actions/checkout@v4
       - name: Restore repos
         id: cache-restore-repos
