@@ -18,4 +18,5 @@ jobs:
           username: ${{ secrets.USERNAME }}
           passphrase: ${{ secrets.PASSPHRASE }}
           key: ${{ secrets.KEY }}
+          envs: WEEKLY_CI
           script: bash weekly
