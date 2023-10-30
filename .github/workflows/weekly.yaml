@@ -16,4 +16,5 @@ jobs:
           username: ${{ secrets.USERNAME }}
           passphrase: ${{ secrets.PASSPHRASE }}
           key: ${{ secrets.KEY }}
+          command_timeout: 2h
           script: bash weekly
