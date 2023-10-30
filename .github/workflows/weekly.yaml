@@ -11,12 +11,9 @@ jobs:
     steps:
       - name: Connect to SSH
         uses: appleboy/ssh-action@v1.0.0
-        env:
-          WEEKLY_CI: "true"
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           passphrase: ${{ secrets.PASSPHRASE }}
           key: ${{ secrets.KEY }}
-          envs: WEEKLY_CI
           script: bash weekly
