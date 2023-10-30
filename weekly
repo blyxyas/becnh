@@ -1,0 +1,17 @@
+#!/bin/bash
+# This script is used by the dev-desktop-us-1 instance once a week to benchmark
+# Don't use this script directly, use becnh (which is user friendly and all that)
+
+if [ -z "$WEEKLY_CI" ]; then
+    echo "This script shouldn't be ran apart from weekly.yaml. It has 0 benefits to
+running \`becnh --master\`. Stop being so silly! :3"
+fi
+
+cd becnh || exit 1
+# bash becnh --master
+# cp rustc-perf/results.db .
+# git add results.db
+# git commit -m "Update results.db for $(date +%Y-%m-%d)"
+# git push
+
+echo "Weekly run is done!"

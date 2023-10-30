@@ -9,45 +9,13 @@ jobs:
   benchmark_master:
     runs-on: ubuntu-latest
     steps:
-      - name: Install latest nightly
-        uses: actions-rs/toolchain@v1
+      - name: Connect to SSH
+        uses: appleboy/ssh-action@v1.0.0
+        env:
+          WEEKLY_CI: "true"
         with:
-          toolchain: nightly
-          default: true
-          profile: minimal
-      - uses: actions/checkout@v4
-      - name: Restore repos
-        id: cache-restore-repos
-        uses: actions/cache/restore@v3
-        with:
-          path: |
-            rust-clippy
-            rust
-            rustc-perf
-          key: ${{ runner.os }}-repos
-
-      - name: becnh --master
-        run: bash becnh --master
-
-      - name: Save repos
-        uses: actions/cache/save@v3
-        with:
-          path: |
-            rust-clippy
-            rust
-            rustc-perf
-          key: ${{ steps.cache-restore-repos.outputs.cache-primary-key }}
-
-      - name: Commit results.db
-        run: |
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          cp rustc-perf/results.db .
-          git add results.db
-          git commit -a -m "Update results.db for `date +%Y-%m-%d`"
-      
-      - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          key: ${{ secrets.KEY }}
+          script: bash weekly
