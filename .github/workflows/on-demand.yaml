@@ -1,0 +1,19 @@
+name: Clippy On-Command Benchmarking
+on:
+  issue_comment:
+jobs:
+  # For the commands on issues
+  issue_commented:
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    name: On demand run
+    steps:
+      - name: Connect to SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          key: ${{ secrets.KEY }}
+          command_timeout: 2h
+          script: bash weekly $(echo ${{ github.event.comment.body }} | cut -d ':' -f 1) $(echo ${{ github.event.comment.body }} | cut -d ':' -f 2 | cut -d '@' -f 1)
