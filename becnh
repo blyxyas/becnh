@@ -23,40 +23,10 @@ server or a Rust Dev Desktop
     exit
 }
 
-# I love interpreted languages <3 there isn't such thing as "security", so I
-# can just do whatever I want hehe :3
-check_color() {
-    if [ -t 1 ]; then
-        ncolors=$(tput colors)
-        if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
-            bold="$(tput bold)"
-            normal="$(tput sgr0)"
-            red="$(tput setaf 1)"
-            green="$(tput setaf 2)"
-
-            smart_echo() {
-                echo "${green}${bold}$1${normal} $2"
-            }
-
-            error() {
-                echo "[${red}${bold}ERROR${normal}] $1"
-            }
-        else
-            smart_echo() {
-                echo "$1 $2"
-            }
-
-            error() {
-                echo "[ERROR] $1"
-            }
-        fi
-    fi
-}
-
 check_color
 
 reconfigure() {
-    smart_echo "Reconfiguring"
+    echo "Reconfiguring"
     echo "# See \`src/bootstrap/defaults\` for more information.
 # Note that this has no default value (x.py uses the defaults in \`config.example.toml\`).
 profile = 'dist'
@@ -87,11 +57,11 @@ llvm.download-ci-llvm = true # We don't need to build LLVM
 
 baseline() {
     cd ../rust || error "Couldn't enter into rust"
-    smart_echo "Build" "rust-clippy:master"
+    echo "Build" "rust-clippy:master"
     git switch master
     git pull origin master --rebase
     ./x build src/tools/clippy > /dev/null
-    smart_echo "Benchmark" "Benchmarking master!"
+    echo "Benchmark" "Benchmarking master!"
     cd ../rustc-perf || error "Couldn't enter rustc-perf"
     ./target/release/collector bench_local ../rust/build/host/stage2/bin/rustc --profiles Clippy --clippy ../rust/build/host/stage2/bin/cargo-clippy --id "master-$(date +%Y-%m-%d)"
 }
@@ -131,17 +101,17 @@ fi
 
 # Check that all relevant repositories are there, if not, clone them.
 if [ ! -d "rust-clippy" ]; then
-    smart_echo "Cloning" "rust-lang/rust-clippy"
+    echo "Cloning" "rust-lang/rust-clippy"
     git clone https://github.com/rust-lang/rust-clippy &
 fi
 
 if [ ! -d "rustc-perf" ]; then
-    smart_echo "Cloning" "rust-lang/rustc-perf"
+    echo "Cloning" "rust-lang/rustc-perf"
     git clone https://github.com/rust-lang/rustc-perf &
 fi
 
 if [ ! -d "rust" ]; then
-    smart_echo "Cloning" "rust-lang/rust"
+    echo "Cloning" "rust-lang/rust"
     FIRST_TIME=true
     git clone https://github.com/rust-lang/rust
     reconfigure
@@ -157,7 +127,7 @@ if [ ! "$MASTER" ]; then
         if [ $# -ne 2 ]; then
             display_help
         fi
-            smart_echo "Cloning" "The Clippy PR ($1:$2)"
+            echo "Cloning" "The Clippy PR ($1:$2)"
             git fetch origin pull/"$1"/head:"$2" || (echo "Something went wrong" && exit)
         else
             display_help
@@ -180,12 +150,12 @@ cp -r ../rust-clippy src/tools/clippy
 
 # Build Rust if it's the first time
 if [ "$FIRST_TIME" ]; then
-    smart_echo "Building Rust for the first time, this will take a while."
+    echo "Building Rust for the first time, this will take a while."
     ./x build > /dev/null
 fi
 
 # Now, let's build Clippy
-smart_echo "Building" "src/tools/clippy"
+echo "Building" "src/tools/clippy"
 ./x build src/tools/clippy > /dev/null &
 
 # While we're building Clippy, let's also build rustc-perf
@@ -198,7 +168,7 @@ wait
 if [ -t 1 ]; then
     if [ -z "$SSH_CLIENT" ] || [ -z "$SSH_TTY" ] || [ -z "$CI" ] && [ -n "$CONTINUE" ]; then
         # We're not SSH'd or on CI
-        smart_echo "Question" "You're not a remote SSH server, nor on CI, are you sure you want to
+        echo "Question" "You're not a remote SSH server, nor on CI, are you sure you want to
 continue? Benchmarking on personal computers with other processes running
 is unreliable and may yield incorrect results
 (set CONTINUE as a env. variable to allow this every time), [Y/n]: "
@@ -223,7 +193,7 @@ fi
 # Let's benchmark this, it would be really cool to benchmark both master and
 # the PR async, but that would need multiple machines to ensure good results.
 
-smart_echo "Benchmark" "Starting benchmarks!"
+echo "Benchmark" "Starting benchmarks!"
 cd ../rustc-perf || error "Couldn't enter rustc-perf"
 ./target/release/collector bench_local ../rust/build/host/stage2/bin/rustc --profiles Clippy --clippy ../rust/build/host/stage2/bin/cargo-clippy --id "PR-$1"
 
@@ -233,7 +203,7 @@ cd ../rustc-perf || error "Couldn't enter rustc-perf"
 WEEK=604800
 CURRENT_TIME=$(date +%s)
 if [ "$((10#$CURRENT_TIME - 10#$LAST_COMMIT_TIME))" -ge $WEEK ]; then
-    smart_echo "Question" "Time since last measure is more than a week, do you wish to re-benchmark master Clippy? [Y/n]: "
+    echo "Question" "Time since last measure is more than a week, do you wish to re-benchmark master Clippy? [Y/n]: "
     read -r rebench
     if [ "$rebench" != "${rebench#[Yy]}" ]; then
         baseline
