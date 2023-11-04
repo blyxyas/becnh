@@ -3,7 +3,11 @@
 # Don't use this script directly, use becnh (which is user friendly and all that)
 
 cd becnh || exit 1
-bash becnh --master
+if [ -n "$1" ]; then
+    bash becnh "$1" "$2"
+else
+    bash becnh --master
+fi
 cp rustc-perf/results.db .
 git add results.db
 git commit -m "Update results.db for $(date +%Y-%m-%d)"
