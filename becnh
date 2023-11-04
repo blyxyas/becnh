@@ -176,7 +176,7 @@ LAST_COMMIT_TIME=$(git log -1 --format="%ct")
 
 git fetch # Update metadata
 git checkout -b sync-from-clippy-"$1" ;
-sudo cp -r ../rust-clippy src/tools/clippy
+cp -r ../rust-clippy src/tools/clippy
 
 # Build Rust if it's the first time
 if [ "$FIRST_TIME" ]; then
